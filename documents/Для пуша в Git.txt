@@ -13,6 +13,6 @@ git branch -M main
 git push -u origin main
 
 Что бы запушить на git
-git add .
-git commit -m "описание изменений"
-git push
+git add -A
+git commit -m ""
+git push origin main
