@@ -2,102 +2,93 @@
 
 """
 Базовый класс для всех генераторов сигналов.
-Каждый генератор должен предоставлять унифицированные методы для задания пределов
-и управления выходными параметрами тестового сигнала.
+
+Абстрактный контракт сведён к реальному минимуму, который оба генератора
+(PTSGenerator, MantigoraGenerator) фактически реализуют.
+
+Конкретные вспомогательные методы (apply_settings, enable_output) добавлены
+для совместимости с вкладками UI — они делегируют вызовы к абстрактным методам.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import List, Optional
 
 
 class BaseGenerator(ABC):
     """
-    Абстрактный базовый класс, определяющий интерфейс управления
-    измерительным генератором (источником сигнала).
+    Абстрактный базовый класс для управления источником сигнала.
+
+    Наследники обязаны реализовать семь абстрактных методов/свойств.
+    Остальные методы имеют реализацию по умолчанию.
     """
+
+    # ── Обязательный интерфейс ────────────────────────────────────────────────
 
     @abstractmethod
     def connect(self, device_panels: Optional[List] = None) -> bool:
         """
-        Подключиться к генератору. При необходимости может принимать
-        список панелей устройств для поиска подходящего драйвера.
+        Подключиться к генератору.
 
         Args:
-            device_panels: Опциональный список панелей-устройств,
+            device_panels: Опциональный список панелей устройств,
                            среди которых ищется связанный прибор.
-
         Returns:
-            bool: True при успешном подключении, иначе False.
+            True при успешном подключении.
         """
-        pass
 
     @abstractmethod
     def disconnect(self) -> None:
         """Отключиться от генератора."""
-        pass
 
+    @property
     @abstractmethod
     def is_connected(self) -> bool:
-        """Вернуть True, если генератор подключен и готов к работе."""
-        pass
+        """True, если генератор подключён и готов к работе."""
 
     @abstractmethod
-    def set_voltage(self, value: float) -> None:
-        """Установить выходное напряжение (В)."""
-        pass
-
-    @abstractmethod
-    def set_current(self, value: float) -> None:
-        """Установить выходной ток (А)."""
-        pass
-
-    @abstractmethod
-    def set_frequency(self, value: float) -> None:
-        """Установить частоту выходного сигнала (Гц)."""
-        pass
-
-    @abstractmethod
-    def set_phase(self, angle: float) -> None:
+    def set_point(self, setpoints: dict) -> None:
         """
-        Установить угол фазового сдвига (градусы).
-        Обычно применимо для многофазных или синхронизированных систем.
+        Применить набор уставок и активировать выход.
+
+        Ключи словаря зависят от типа генератора:
+          - PTSGenerator:       Ua, Ub, Uc, Ia, Ib, Ic, phi_a, phi_b, phi_c, f
+          - MantigoraGenerator: U_output
         """
-        pass
 
     @abstractmethod
-    def enable_output(self, enable: bool = True) -> None:
-        """Включить или выключить выход генератора."""
-        pass
+    def output_off(self) -> None:
+        """Выключить выход генератора."""
 
     @abstractmethod
-    def get_output_state(self) -> bool:
-        """Вернуть True, если выход активен."""
-        pass
+    def get_config(self) -> dict:
+        """Вернуть словарь с текущей конфигурацией генератора (для сохранения)."""
 
     @abstractmethod
-    def get_actual_voltage(self) -> float:
-        """Считать текущее установленное/измеренное напряжение."""
-        pass
+    def apply_config(self, config: dict) -> None:
+        """Загрузить конфигурацию из словаря."""
 
-    @abstractmethod
-    def get_actual_current(self) -> float:
-        """Считать текущий установленный/измеренный ток."""
-        pass
+    # ── Опциональный интерфейс (реализации по умолчанию) ─────────────────────
 
-    @abstractmethod
-    def get_actual_frequency(self) -> float:
-        """Считать текущую частоту."""
-        pass
+    @property
+    def channel_names(self) -> List[str]:
+        """Список имён каналов генератора. Переопределяется в наследниках."""
+        return []
 
-    @abstractmethod
     def apply_settings(self, settings: dict) -> None:
         """
-        Применить набор параметров из словаря.
-        Ключи: 'voltage', 'current', 'frequency', 'phase', 'output'.
+        Удобная обёртка для вкладок UI.
+        Передаёт словарь напрямую в set_point().
         """
-        pass
+        self.set_point(settings)
 
-    @abstractmethod
+    def enable_output(self, enable: bool = True) -> None:
+        """
+        Включить / выключить выход.
+        Включение управляется через set_point() — здесь обрабатывается только выключение.
+        """
+        if not enable:
+            self.output_off()
+
     def get_info(self) -> dict:
-        """Вернуть словарь с идентификационной информацией о генераторе."""
-        pass
+        """Идентификационная информация о генераторе (переопределяется по желанию)."""
+        return {"type": self.__class__.__name__, "connected": self.is_connected}

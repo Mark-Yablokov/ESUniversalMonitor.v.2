@@ -29,6 +29,7 @@ mantigora_driver.py
     30 кВ    2.133   320      128      32
 
 v2.1.0 — исправлен порядок байт (little-endian) и чётность порта (Even) (2026-04-22)
+v2.1.1 — connect() теперь возвращает True при успешном открытии порта (2026-04-23)
 """
 
 import struct
@@ -159,8 +160,20 @@ class MantigoraDriver:
     # ------------------------------------------------------------------
     # Подключение / отключение
     # ------------------------------------------------------------------
-    def connect(self) -> None:
-        """Открыть COM-порт."""
+    def connect(self) -> bool:
+        """
+        Открыть COM-порт.
+
+        Returns
+        -------
+        bool
+            True при успешном открытии порта.
+
+        Raises
+        ------
+        MantigoraDriverError
+            Если порт уже открыт или возникла ошибка serial.
+        """
         with self._lock:
             if self._is_connected:
                 raise MantigoraDriverError("Уже подключено")
@@ -177,6 +190,7 @@ class MantigoraDriver:
             self._ser           = ser
             self._is_connected  = True
             self._output_active = False
+            return True  # ← исправление v2.1.1: явный возврат True
 
     def disconnect(self) -> None:
         """Выключить выход и закрыть COM-порт."""
@@ -245,7 +259,7 @@ class MantigoraDriver:
             u_code = max(0, min(0xFFFF, u_code))
             i_code = max(0, min(0xFFFF, i_code))
 
-            # Команда 0x01 + 4 байта в little-endian (младший байт первым)
+            # Команда 0x01 + 4 байта в little-endian (U первым, затем I — по протоколу)
             payload = bytes([self.CMD_SET]) + struct.pack("<HH", u_code, i_code)
             self._ser.write(payload)
             time.sleep(0.05)

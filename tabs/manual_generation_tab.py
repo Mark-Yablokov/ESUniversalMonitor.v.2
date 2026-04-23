@@ -2,6 +2,12 @@
 
 """
 Вкладка для ручной генерации тестовых сигналов и сравнения с измерениями.
+
+Исправления (2026-04-23):
+  - toggle_generator_connection: is_connected() → is_connected (property, без скобок).
+  - toggle_output: enable_output() заменён на прямой вызов output_off().
+  - apply_settings: generator.apply_settings() → generator.apply_settings()
+    (теперь работает через BaseGenerator.apply_settings → set_point).
 """
 
 import json
@@ -170,7 +176,8 @@ class ManualGenerationTab(QWidget):
         self.device_panels = panels
 
     def toggle_generator_connection(self):
-        if self.generator and self.generator.is_connected():
+        # Исправление: is_connected — @property, вызываем без скобок
+        if self.generator and self.generator.is_connected:
             self.disconnect_generator()
         else:
             self.connect_generator()
@@ -203,19 +210,27 @@ class ManualGenerationTab(QWidget):
         self.log("Генератор отключен.")
 
     def toggle_output(self, enabled: bool):
-        if not self.generator or not self.generator.is_connected():
+        # Исправление: is_connected — @property, без скобок
+        if not self.generator or not self.generator.is_connected:
             self.output_check.blockSignals(True)
             self.output_check.setChecked(False)
             self.output_check.blockSignals(False)
             return
         try:
-            self.generator.enable_output(enabled)
-            self.log(f"Выход {'включен' if enabled else 'выключен'}.")
+            if enabled:
+                # Включение выхода управляется через apply_settings/set_point.
+                # Если пользователь просто ставит галочку без применения параметров,
+                # повторно отправляем текущие уставки.
+                self.apply_settings()
+            else:
+                self.generator.output_off()
+                self.log("Выход выключен.")
         except Exception as e:
             self.log(f"Ошибка управления выходом: {e}")
 
     def apply_settings(self):
-        if not self.generator or not self.generator.is_connected():
+        # Исправление: is_connected — @property, без скобок
+        if not self.generator or not self.generator.is_connected:
             QMessageBox.warning(self, "Ошибка", "Генератор не подключен.")
             return
 
@@ -226,6 +241,7 @@ class ManualGenerationTab(QWidget):
             'phase': self.phase_spin.value()
         }
         try:
+            # BaseGenerator.apply_settings() → set_point(settings)
             self.generator.apply_settings(settings)
             self.log(f"Установлены параметры: U={settings['voltage']} В, "
                      f"I={settings['current']} А, f={settings['frequency']} Гц.")
@@ -280,7 +296,6 @@ class ManualGenerationTab(QWidget):
         set_i = f"{measurement['set_current']:.6f}"
         self.results_table.setItem(row, 2, QTableWidgetItem(set_i))
 
-        # Берём первое устройство для отображения (в реальности нужно выбирать)
         meas_u = "---"
         meas_i = "---"
         if measurement['channels']:
@@ -290,8 +305,6 @@ class ManualGenerationTab(QWidget):
 
         self.results_table.setItem(row, 3, QTableWidgetItem(meas_u))
         self.results_table.setItem(row, 4, QTableWidgetItem(meas_i))
-
-        # Статус допусков будет заполнен позже
         self.results_table.setItem(row, 5, QTableWidgetItem("—"))
         self.results_table.setItem(row, 6, QTableWidgetItem("—"))
 
@@ -309,12 +322,11 @@ class ManualGenerationTab(QWidget):
         tol_i_abs = self.tol_current_abs.value()
         tol_i_rel = self.tol_current_rel.value()
 
-        u_spec = ToleranceSpec(absolute=tol_u_abs if tol_u_abs>0 else None,
-                               relative=tol_u_rel if tol_u_rel>0 else None)
-        i_spec = ToleranceSpec(absolute=tol_i_abs if tol_i_abs>0 else None,
-                               relative=tol_i_rel if tol_i_rel>0 else None)
+        u_spec = ToleranceSpec(absolute=tol_u_abs if tol_u_abs > 0 else None,
+                               relative=tol_u_rel if tol_u_rel > 0 else None)
+        i_spec = ToleranceSpec(absolute=tol_i_abs if tol_i_abs > 0 else None,
+                               relative=tol_i_rel if tol_i_rel > 0 else None)
 
-        # Проверяем по первому устройству
         first_dev = list(measurement['channels'].values())[0]
         u_ref = measurement['set_voltage']
         i_ref = measurement['set_current']
@@ -332,8 +344,8 @@ class ManualGenerationTab(QWidget):
             i_pass = i_spec.validate_value(i_meas, i_ref)
             self.results_table.setItem(row, 6, QTableWidgetItem("Да" if i_pass else "Нет"))
 
-        self.log(f"Проверка допусков: U - {'пройдена' if u_pass else 'НЕ пройдена'}, "
-                 f"I - {'пройдена' if i_pass else 'НЕ пройдена'}")
+        self.log(f"Проверка допусков: U — {'пройдена' if u_pass else 'НЕ пройдена'}, "
+                 f"I — {'пройдена' if i_pass else 'НЕ пройдена'}")
 
     def clear_history(self):
         self.measurement_history.clear()

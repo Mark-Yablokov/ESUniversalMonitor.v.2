@@ -13,6 +13,10 @@ main.py
   - Исправлены пути импорта: measurement_tab → tabs.manual_generation_tab
   - Исправлены пути импорта: auto_test_tab → tabs.auto_test_tab
   - CONFIG_DIR изменён на config/config_devices (согласно новой структуре)
+
+Исправления (23.04.2026 — bugfix):
+  - _load_devices_from_config: ключ "Mantigora" расширен до ("Mantigora", "Mantigora HT"),
+    чтобы конфиги, сохранённые с type="Mantigora HT", тоже загружались корректно.
 """
 
 import sys
@@ -70,7 +74,7 @@ class MainWindow(QMainWindow):
         self.dashboard.device_panels = self.device_panels
         self.dashboard.set_history_file(self.history_file)
         self.measurement_tab.device_panels = self.device_panels
-        self.auto_test_tab.device_panels = self.device_panels
+        self.auto_test_tab.device_panels   = self.device_panels
 
     def _ensure_config_dir(self):
         """Создаёт директорию config/config_devices если не существует."""
@@ -187,9 +191,9 @@ class MainWindow(QMainWindow):
         self._save_device_config(panel)
 
         # Обновить ссылки в зависимых вкладках
-        self.dashboard.device_panels = self.device_panels
+        self.dashboard.device_panels     = self.device_panels
         self.measurement_tab.device_panels = self.device_panels
-        self.auto_test_tab.device_panels = self.device_panels
+        self.auto_test_tab.device_panels   = self.device_panels
 
         self.statusBar().showMessage(f"Устройство '{name}' добавлено", 3000)
 
@@ -240,7 +244,9 @@ class MainWindow(QMainWindow):
             elif dev_type == "PTS":
                 panel = PTSPanel(name)
                 panel.apply_config(config)
-            elif dev_type == "Mantigora":
+            elif dev_type in ("Mantigora", "Mantigora HT"):
+                # Исправление: принимаем оба варианта ключа —
+                # "Mantigora" (старый) и "Mantigora HT" (новый, из MantigoraPanel.get_config)
                 panel = MantigoraPanel(name)
                 panel.apply_config(config)
             else:

@@ -2,6 +2,12 @@
 
 """
 Вкладка автоматического проведения поверки по заданной методике.
+
+Исправления (2026-04-23):
+  - start_test: generator.is_connected() → generator.is_connected (property, без скобок).
+  - AutoTestWorker.run: generator.apply_settings() → generator.set_point()
+    (метод apply_settings также доступен через BaseGenerator.apply_settings → set_point,
+     но явный вызов set_point() нагляднее и соответствует интерфейсу генераторов).
 """
 
 import json
@@ -28,38 +34,38 @@ class AutoTestWorker(QThread):
     """
     Поток для выполнения автоматического тестирования без блокировки GUI.
     """
-    log_signal = pyqtSignal(str)
-    progress_signal = pyqtSignal(int, int)
-    measurement_signal = pyqtSignal(dict)        # результат одного измерения
-    point_finished_signal = pyqtSignal(str, bool) # имя точки, успех
-    finished_signal = pyqtSignal(bool, str)       # общий успех, сообщение
+    log_signal            = pyqtSignal(str)
+    progress_signal       = pyqtSignal(int, int)
+    measurement_signal    = pyqtSignal(dict)         # результат одного измерения
+    point_finished_signal = pyqtSignal(str, bool)    # имя точки, успех
+    finished_signal       = pyqtSignal(bool, str)    # общий успех, сообщение
 
     def __init__(self, test_points: List[TestPoint],
                  generator, device_panels: List,
                  settings: Dict[str, Any]):
         super().__init__()
-        self.test_points = test_points
-        self.generator = generator
+        self.test_points   = test_points
+        self.generator     = generator
         self.device_panels = device_panels
-        self.settings = settings
-        self._is_running = True
+        self.settings      = settings
+        self._is_running   = True
 
     def run(self):
-        total = len(self.test_points)
+        total         = len(self.test_points)
         success_count = 0
-        results = []
 
         for idx, point in enumerate(self.test_points):
             if not self._is_running:
                 self.log_signal.emit("Тест прерван пользователем.")
                 break
 
-            self.log_signal.emit(f"\n--- Точка {idx+1}/{total}: {point.name} ---")
+            self.log_signal.emit(f"\n--- Точка {idx + 1}/{total}: {point.name} ---")
             self.progress_signal.emit(idx + 1, total)
 
             # Установка параметров генератора
+            # Исправление: используем set_point() — реальный метод генераторов.
             try:
-                self.generator.apply_settings(point.setpoints)
+                self.generator.set_point(point.setpoints)
                 self.log_signal.emit(f"Установлены параметры: {point.setpoints}")
             except Exception as e:
                 self.log_signal.emit(f"Ошибка установки параметров: {str(e)}")
@@ -81,14 +87,12 @@ class AutoTestWorker(QThread):
             for rep in range(point.repeat_count):
                 if not self._is_running:
                     break
-                self.log_signal.emit(f"Измерение {rep+1}/{point.repeat_count}")
+                self.log_signal.emit(f"Измерение {rep + 1}/{point.repeat_count}")
                 measurement = self._perform_measurement(point)
                 self.measurement_signal.emit(measurement)
 
-                # Проверка допусков
                 if not self._check_tolerances(measurement, point.tolerances):
                     point_success = False
-                results.append(measurement)
 
             if point_success:
                 success_count += 1
@@ -98,7 +102,6 @@ class AutoTestWorker(QThread):
 
             self.point_finished_signal.emit(point.name, point_success)
 
-        # Завершение
         if self._is_running:
             msg = f"Тест завершен. Пройдено {success_count} из {total} точек."
             self.finished_signal.emit(True, msg)
@@ -108,15 +111,15 @@ class AutoTestWorker(QThread):
     def _perform_measurement(self, point: TestPoint) -> Dict:
         """Собрать измерения со всех подключённых панелей устройств."""
         data = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp':  datetime.now().isoformat(),
             'point_name': point.name,
-            'setpoints': point.setpoints.copy(),
-            'channels': {}
+            'setpoints':  point.setpoints.copy(),
+            'channels':   {}
         }
         for panel in self.device_panels:
             if hasattr(panel, 'get_measurement'):
                 dev_id = panel.get_device_id()
-                meas = panel.get_measurement()
+                meas   = panel.get_measurement()
                 if meas:
                     data['channels'][dev_id] = meas
         return data
@@ -125,15 +128,10 @@ class AutoTestWorker(QThread):
                           tolerances: Dict[str, ToleranceSpec]) -> bool:
         """
         Проверить, соответствуют ли измеренные значения допускам.
-        Пока реализована упрощённая проверка: если есть допуск и
-        измеренное значение выходит за пределы, возвращаем False.
         """
-        # В полной реализации нужно сопоставлять каналы с допусками
-        # Здесь заглушка — всегда возвращаем True, если не указано иное
         if not tolerances:
             return True
 
-        # Для демонстрации проверяем только если в measurement есть ключ 'voltage'
         for channel, spec in tolerances.items():
             for dev_id, dev_meas in measurement.get('channels', {}).items():
                 measured_val = dev_meas.get(channel)
@@ -153,9 +151,9 @@ class AutoTestTab(QWidget):
 
     def __init__(self, device_panels: List = None, parent=None):
         super().__init__(parent)
-        self.device_panels = device_panels or []
+        self.device_panels: List   = device_panels or []
         self.test_points: List[TestPoint] = []
-        self.generator = None
+        self.generator             = None
         self.worker: Optional[AutoTestWorker] = None
         self._setup_ui()
         self._load_methodology_list()
@@ -164,7 +162,7 @@ class AutoTestTab(QWidget):
         layout = QVBoxLayout(self)
 
         # Верхняя панель управления
-        control_group = QGroupBox("Управление тестом")
+        control_group  = QGroupBox("Управление тестом")
         control_layout = QHBoxLayout(control_group)
 
         control_layout.addWidget(QLabel("Методика:"))
@@ -213,7 +211,7 @@ class AutoTestTab(QWidget):
         layout.addLayout(progress_layout)
 
         # Лог
-        log_group = QGroupBox("Журнал выполнения")
+        log_group  = QGroupBox("Журнал выполнения")
         log_layout = QVBoxLayout(log_group)
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
@@ -257,11 +255,9 @@ class AutoTestTab(QWidget):
             self.points_table.setItem(i, 4, QTableWidgetItem("—"))
 
     def set_device_panels(self, panels: List):
-        """Установить список панелей устройств."""
         self.device_panels = panels
 
     def set_generator(self, generator):
-        """Установить активный генератор."""
         self.generator = generator
 
     def start_test(self):
@@ -269,7 +265,9 @@ class AutoTestTab(QWidget):
         if not self.test_points:
             QMessageBox.warning(self, "Предупреждение", "Не загружена методика.")
             return
-        if not self.generator or not self.generator.is_connected():
+
+        # Исправление: is_connected — @property, вызываем без скобок
+        if not self.generator or not self.generator.is_connected:
             QMessageBox.warning(self, "Предупреждение", "Генератор не подключен.")
             return
 
@@ -279,7 +277,6 @@ class AutoTestTab(QWidget):
         self.progress_bar.setMaximum(len(self.test_points))
         self.progress_bar.setValue(0)
 
-        # Очистить статусы в таблице
         for i in range(len(self.test_points)):
             self.points_table.setItem(i, 4, QTableWidgetItem("Ожидание"))
 
@@ -300,14 +297,12 @@ class AutoTestTab(QWidget):
         self.worker.start()
 
     def stop_test(self):
-        """Остановить тест."""
         if self.worker and self.worker.isRunning():
             self.worker.stop()
             self.log("Запрос остановки теста...")
             self.stop_btn.setEnabled(False)
 
     def test_finished(self, success: bool, message: str):
-        """Обработка завершения теста."""
         self.log(message)
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
@@ -320,36 +315,29 @@ class AutoTestTab(QWidget):
         self.progress_bar.setValue(current)
 
     def update_point_status(self, point_name: str, passed: bool):
-        """Обновить статус точки в таблице."""
         for i in range(self.points_table.rowCount()):
             if self.points_table.item(i, 0).text() == point_name:
                 status = "Пройдена" if passed else "Не пройдена"
-                item = QTableWidgetItem(status)
-                if passed:
-                    item.setForeground(Qt.green)
-                else:
-                    item.setForeground(Qt.red)
+                item   = QTableWidgetItem(status)
+                item.setForeground(Qt.green if passed else Qt.red)
                 self.points_table.setItem(i, 4, item)
                 break
 
     def handle_measurement(self, data: Dict):
-        """Обработать результат измерения."""
-        # Можно сохранять в историю, пока просто логируем
         pass
 
     def log(self, message: str):
         self.log_text.append(message)
 
     def _save_report(self):
-        """Сохранить отчёт о тесте в CSV."""
         filename = f"auto_test_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        path = os.path.join("history", filename)
+        path     = os.path.join("history", filename)
         try:
             os.makedirs("history", exist_ok=True)
             with open(path, 'w', encoding='utf-8') as f:
                 f.write("Точка;Параметры;Статус\n")
                 for i in range(self.points_table.rowCount()):
-                    name = self.points_table.item(i, 0).text()
+                    name   = self.points_table.item(i, 0).text()
                     params = self.points_table.item(i, 1).text()
                     status = self.points_table.item(i, 4).text()
                     f.write(f"{name};{params};{status}\n")
