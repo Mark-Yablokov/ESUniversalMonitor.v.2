@@ -1,0 +1,11 @@
+{
+  "type": "Rigol",
+  "name": "DM3068",
+  "poll_interval": 2.0,
+  "ip": "192.168.0.125",
+  "mode": "Напряжение DC",
+  "auto_range": true,
+  "range": 10.0,
+  "nplc": 10,
+  "milli_mode": false
+}

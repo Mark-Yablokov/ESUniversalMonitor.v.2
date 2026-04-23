@@ -1,0 +1,27 @@
+RAW ссылки на файлы:
+https://github.com/Mark-Yablokov/ESUniversalMonitor.v.2/blob/main/documents/CONTEXT.md
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/requirements.txt
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/main.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/utils/__init__.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/utils/config_manager.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/utils/history_manager.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/tabs/__init__.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/tabs/auto_test_tab.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/tabs/dashboard.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/tabs/manual_generation_tab.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/panels/__init__.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/panels/base_device_panel.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/panels/mantigora_panel.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/panels/modbus_panel.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/panels/pts_panel.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/panels/rigol_panel.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/generators/__init__.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/generators/base_generator.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/generators/mantigora_generator.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/generators/pts_generator.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/drivers/__init__.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/drivers/mantigora_driver.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/drivers/modBus.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/drivers/pts_driver.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/core/__init__.py
+https://raw.githubusercontent.com/Mark-Yablokov/ESUniversalMonitor.v.2/refs/heads/main/core/measurement_types.py

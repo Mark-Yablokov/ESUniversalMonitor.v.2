@@ -1,0 +1,23 @@
+{
+  "plots": [
+    {
+      "name": "1",
+      "parameters": [
+        "ENIP-2(test):Ua",
+        "ENIP-2(test):Ub",
+        "ENIP-2(test):Uc",
+        "PTS:Ua",
+        "PTS:Ub",
+        "PTS:Uc"
+      ],
+      "param_colors": {},
+      "param_scales": {},
+      "etalon_param": null,
+      "error_type": "relative",
+      "nominal": 100.0,
+      "tolerance": 1.0,
+      "show_tolerance": true,
+      "window_sec": 300
+    }
+  ]
+}

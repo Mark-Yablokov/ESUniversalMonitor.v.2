@@ -1,0 +1,49 @@
+{
+  "type": "Modbus",
+  "name": "ENMV-3",
+  "poll_interval": 2.0,
+  "conn_type": "Modbus TCP",
+  "ip": "192.168.0.83",
+  "port": 5000,
+  "serial_port": "COM1",
+  "baudrate": 9600,
+  "slave_id": 1,
+  "registers": [
+    {
+      "name": "AI1(140)",
+      "addr": 8193,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "V"
+    },
+    {
+      "name": "AI2(140)",
+      "addr": 8195,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "mA"
+    },
+    {
+      "name": "AI1(141)",
+      "addr": 8197,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "V"
+    },
+    {
+      "name": "AI2(141)",
+      "addr": 8199,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "V"
+    }
+  ]
+}

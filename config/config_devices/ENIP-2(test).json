@@ -1,0 +1,40 @@
+{
+  "type": "Modbus",
+  "name": "ENIP-2(test)",
+  "poll_interval": 2.0,
+  "conn_type": "Modbus RTU over TCP",
+  "ip": "192.168.0.13",
+  "port": 513,
+  "serial_port": "COM1",
+  "baudrate": 9600,
+  "slave_id": 1,
+  "registers": [
+    {
+      "name": "Ua",
+      "addr": 92,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "V"
+    },
+    {
+      "name": "Ub",
+      "addr": 94,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "V"
+    },
+    {
+      "name": "Uc",
+      "addr": 96,
+      "type": "float32",
+      "count": 2,
+      "byte_order": "3-4-1-2",
+      "scale": 1.0,
+      "unit": "V"
+    }
+  ]
+}

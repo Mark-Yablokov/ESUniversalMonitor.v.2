@@ -1,0 +1,18 @@
+https://github.com/Mark-Yablokov/ESUniversalMonitor.v.2.git
+
+echo "# ESUniversalMonitor.v.2" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/Mark-Yablokov/ESUniversalMonitor.v.2.git
+git push -u origin main
+
+git remote add origin https://github.com/Mark-Yablokov/ESUniversalMonitor.v.2.git
+git branch -M main
+git push -u origin main
+
+Что бы запушить на git
+git add .
+git commit -m "описание изменений"
+git push

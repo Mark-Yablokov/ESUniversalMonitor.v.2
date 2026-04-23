@@ -1,0 +1,871 @@
+unit Unit1;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
+  StdCtrls, OleCtrls, chartfx3, ComCtrls, Buttons, Spin, Grids, ExtCtrls,
+  DBCtrls, Mask, Lib_Mod, Lib_VasM, math, Menus, Chart, TeEngine, Series,
+  TeeProcs, D2XXUnit;
+
+const
+  data_num=5; //количество принимаемых из МК байт
+  FT_DLL_Name = 'FTD2XX.DLL';
+  Type FT_Result = Integer;
+  var
+  kk, Number_of_fault, Number_of_fault_MAX:integer;
+  st,Iunits, The_language:string[40];
+  Polarity:Char;
+  volt_view, current_view:integer;
+  High_Voltage_On,DAC, DAC1, DAC2:integer;
+  HV_DIV, Ripple, Current,I_SUPPLY:real;
+  ThreadID:dword;
+  device_ok:boolean;
+  SerNum:integer;
+        Codemax, Codemax2, Codemax_ADC, Codemax_DAC:word;
+        Currentmax, Currentmin, Voltmax, VoltMin, VoltStep,CurrentStep :integer;
+        Imin, Imax :real;
+        Rsense:real;
+        F,Ros:integer;
+
+
+type
+  TForm1 = class(TForm)
+    Button2: TButton;
+    Timer1: TTimer;
+    Button3: TButton;
+    Label10: TLabel;
+    Edit7: TEdit;
+    SpinEdit2: TSpinEdit;
+    Label5: TLabel;
+    Button1: TButton;
+    Panel1: TPanel;
+    Label7: TLabel;
+    Label8: TLabel;
+    TrackBar1: TTrackBar;
+    Label12: TLabel;
+    Timer2: TTimer;
+    Label1: TLabel;
+    Edit1: TEdit;
+    Label2: TLabel;
+    Edit3: TEdit;
+    Label4: TLabel;
+    Edit2: TEdit;
+    Label6: TLabel;
+    ComboBox1: TComboBox;
+    Label3: TLabel;
+    Label9: TLabel;
+    Label11: TLabel;
+    SpinEdit1: TSpinEdit;
+    TrackBar2: TTrackBar;
+    procedure FormCreate(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+    procedure Button3Click(Sender: TObject);
+    procedure Button1Click(Sender: TObject);
+    procedure SpinEdit2Change(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
+    procedure Timer2Timer(Sender: TObject);
+    procedure TrackBar1Change(Sender: TObject);
+    procedure ComboBox1Change(Sender: TObject);
+    procedure TrackBar2Change(Sender: TObject);
+    procedure SpinEdit1Change(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+   type options_rec=record
+    language:string[20];
+   end;
+
+ var
+  Form1: TForm1;
+   var
+    Transmit:array[0..data_num] of byte;
+    CommHandle : integer;
+    DCB : TDCB;
+    Ovr : TOverlapped;
+    Stat : TComStat;
+    CommThread : THandle;
+    hEvent : THandle;
+    Flag,StopResive : boolean;
+    KolByte,Kols,Mask,TransMask,Errs : DWord;
+    PortStatus : FT_Result;
+    Supply_On:boolean;
+    value:word;
+    ReadData:boolean;
+    options:options_rec;
+
+procedure ReadComm;
+procedure WriteComm();
+implementation
+
+function FT_SetEventNotification(ftHandle:DWord; EventMask:DWord; pvArgs:Dword):FT_Result; stdcall; External FT_DLL_Name name 'FT_SetEventNotification';
+function FT_GetStatus(ftHandle:DWord; RxBytes,TxBytes,EventStatus:Pointer):FT_Result; stdcall; External FT_DLL_Name name 'FT_GetStatus';
+function FT_EE_Read(ftHandle:DWord; pEEData:Pointer):FT_Result; stdcall; External FT_DLL_Name name 'FT_EE_Read';
+{$R *.dfm}
+
+Procedure DeviceConnect; //Инициализируем драйвер USB
+begin
+  Sleep (1000);
+  PortStatus:=Open_USB_Device;
+  PortStatus:=Reset_USB_Device;
+  FT_Current_Baud:=38400;
+  PortStatus:=Set_USB_Device_BaudRate;
+  FT_Current_DataBits:=8;
+  FT_Current_StopBits:=0;
+  FT_Current_Parity:=0;
+  PortStatus:=Set_USB_Device_DataCharacteristics;
+end;
+
+//Процедура смены языка
+procedure LanguageChange;
+Begin
+
+    If Form1.Combobox1.Text='English' then begin
+        Form1.Caption:='Mantigora. High voltage power supply.';
+        Form1.Label2.Caption:='       HVPS type:';
+        Form1.Label4.Caption:='     Serial number:';
+        Form1.Label6.Caption:='Language:';
+        Form1.Label5.Caption:= '             Output high voltage value, V';
+        Form1.Label3.Caption:= '             Output current value, uA';
+        Form1.Label10.Caption:='              Output voltage monitor, V';
+        if (Iunits='мА') then Form1.Label1.Caption:='              Output current monitor, mA:' else Form1.Label1.Caption:='              Output current monitor, uA';
+        Form1.Label12.Caption:='The current mode:';
+        Form1.Panel1.Caption:='Switch OFF';
+        Form1.Button1.Caption:='EXIT';
+        Form1.Button2.Caption:='Switch ON';
+        Form1.Button3.Caption:='Switch OFF';
+        The_language:='English';
+  end;
+
+    If Form1.Combobox1.Text='Русский' then begin
+        Form1.Caption:='Мантигора. Высоковольтный источник питания.';
+        Form1.Label2.Caption:='Найден ВВИП:';
+        Form1.Label4.Caption:='Серийный номер:';
+        Form1.Label6.Caption:='    Язык:';
+        Form1.Label5.Caption:= 'Уставка выходного напряжения, В:';
+        Form1.Label3.Caption:= 'Уставка выходного тока, мкА:';
+        Form1.Label10.Caption:='Монитор выходного напряжения, В:';
+        if (Iunits='мА') then Form1.Label1.Caption:='Монитор выходного тока, мА:' else Form1.Label1.Caption:='Монитор выходного тока, мкА:';
+        Form1.Label12.Caption:='Текущий режим:';
+        Form1.Panel1.Caption:='Switch OFF';
+        Form1.Button1.Caption:='Выход';
+        Form1.Button2.Caption:='Включить/Обновить';
+        Form1.Button3.Caption:='Отключить';
+        The_language:='Русский';
+  end;
+
+end;
+
+procedure TForm1.FormCreate(Sender: TObject);
+var k:word;
+k1,k0:integer;
+st:string;
+begin
+    //создаём поток
+    Number_of_fault_MAX:=1; //количество максимальных неполучений с МК
+    hEvent:=CreateEvent(nil, false, false,'');
+    PortStatus:=FT_SetEventNotification(FT_Handle,FT_EVENT_RXCHAR ,hEvent);
+    CommThread := CreateThread(nil,0,@ReadComm,nil,0,ThreadID);
+
+    //Загрузка файла настроек
+    F:=FileOpen('HighVolt.ini',fmOpenRead);
+    kk:=FileRead(F,The_language,40);
+    fileclose(F);
+
+    Form1.ComboBox1.Text:=The_language;
+    LanguageChange;
+
+end;
+
+// процедура записи в USB-порт
+ procedure WriteComm();
+ var k:integer;
+ begin
+   PortStatus:=Write_USB_Device_Buffer(KolByte);
+ end;
+
+ // процедура обработки потока с USB-порта
+ procedure ReadComm;
+  var
+   Resive:array [0..255] of byte;
+   Pressure1:double;
+   TransMask,Errs,b:DWord;
+   result:integer;
+   delay:integer;
+  begin
+    while true do
+    begin
+    result:=WaitForSingleObject(hEvent,1000);
+    PortStatus:=FT_SetEventNotification(FT_Handle,FT_EVENT_RXCHAR ,hEvent);
+
+    //есть ли в буфере даныне?
+    if ReadData=true then //если данные отправлены Timer2, то пробуем получить ответ
+    begin
+      sleep(200);//ждём пока данные дойдут по USB
+      FT_GetStatus(FT_Handle, @FT_Q_Bytes, @FT_TxQ_Bytes, @FT_Event_Status);
+      If FT_Q_Bytes>data_num-1 then
+      begin
+        Number_of_fault:=0; //обнуляем счётчик неудачных считываний с МК
+//        PortStatus:=Read_USB_Device_Buffer(data_num);
+        PortStatus:=Read_USB_Device_Buffer(FT_Q_Bytes);
+        if FT_In_Buffer[4]=13 then
+        begin
+          // обрабатываю данные от микроконтроллера
+
+          // монитор выходного напряжения
+          HV_DIV:=(FT_In_Buffer[2]*256+FT_In_Buffer[3])*Voltmax/Codemax_ADC/16; {16 - кол-во усреднений в в АЦП внутри МК}
+          If Polarity='N' then HV_DIV:=HV_DIV*(-1); //если прибор с отрицательной полярностью, то значение вых напряжения минусуем
+          if (Voltmax>15000-1) and (Voltmax<30001) then
+            begin
+              HV_DIV:=round(HV_DIV/10)*10;
+              str(HV_DIV:0:0,st);
+            end;
+
+          If abs(HV_DIV)<Voltmin*0.7 then HV_DIV:=0; //минимальное напряжение не показываем
+
+          str(HV_DIV:0:volt_view,st);
+          Form1.Edit7.Text:=st;
+
+          // монитор выходного тока
+          I_SUPPLY:=(FT_In_Buffer[0]*256+FT_In_Buffer[1])*Imax/Codemax_DAC;
+
+          //Вычитаем ток по резистору обратной связи.
+          //If Iunits='мА' then I_SUPPLY:=I_SUPPLY-abs(HV_DIV/1000/Ros);
+          If Iunits='мкА' then I_SUPPLY:=I_SUPPLY-abs(HV_DIV/Ros);
+
+          //минимальный ток не показываем
+          If I_SUPPLY<Imin then I_SUPPLY:=0;
+
+         If Iunits='мА' then I_SUPPLY:=I_SUPPLY/1000;
+
+          //выводим на экран
+          If CurrentStep=10 then I_SUPPLY:=round(I_SUPPLY/10)*10; // если токи большие, то округляем до десятков
+          str(I_SUPPLY:0:current_view,st);
+          Form1.Edit1.Text:=st;
+
+          //пишем что нить в панели состояния
+          If High_Voltage_On=1 then
+          begin
+            Form1.Panel1.Color:=clRed;
+            If The_language='Русский' then Form1.Panel1.Caption:='Включен';
+            If The_language='English' then Form1.Panel1.Caption:='ON';
+          end
+          else
+          begin
+            Form1.Panel1.Color:=clMoneyGreen;
+            If The_language='Русский' then Form1.Panel1.Caption:='Отключен';
+            If The_language='English' then Form1.Panel1.Caption:='OFF';
+
+          end;
+          ReadData:=false; //Ждём пока Timer2 пошлёт следующую порцию данных
+         end
+         else //последнее число 13
+          begin
+            ReadData:=false;
+            Number_of_fault:=Number_of_fault+1;
+            If Number_of_fault>Number_of_fault_MAX then begin
+              Form1.Panel1.Color:=clMoneyGreen;
+              If The_language='Русский' then Form1.Panel1.Caption:='Нет питания прибора';
+              If The_language='English' then Form1.Panel1.Caption:='No power supply';
+              //в индикаторы пишем нули
+              Form1.Edit7.Text:='- - - -';
+              Form1.Edit1.Text:='- - - -';
+              High_Voltage_On:=0; // прога знает что ВВ отключен
+              Form1.Timer1.Enabled:=true; //запускаем таймер1, что бы инициализировал
+              Form1.Timer2.Enabled:=false;
+            end;
+          end;
+          end //если не дождались данных то пишем что нет питания
+            else begin//нет?
+            ReadData:=false;
+            Number_of_fault:=Number_of_fault+1;
+              If Number_of_fault>Number_of_fault_MAX then begin
+                Form1.Panel1.Color:=clMoneyGreen;
+                If The_language='Русский' then Form1.Panel1.Caption:='Нет питания прибора';
+                If The_language='English' then Form1.Panel1.Caption:='No power supply';
+                //в индикаторы пишем нули
+                Form1.Edit7.Text:='- - - -';
+                Form1.Edit1.Text:='- - - -';
+                High_Voltage_On:=0; // прога знает что ВВ отключен
+                Form1.Timer1.Enabled:=true; //запускаем таймер1, что бы инициализировал
+                Form1.Timer2.Enabled:=false;
+              end;
+            end;
+     end; //if ReadData....
+   end;//while
+   end;
+
+procedure TForm1.Button2Click(Sender: TObject);   //Процедура обновления выходного напряжения
+begin
+  Timer2.Enabled:=false;
+  Panel1.Color:=clRed;
+
+  If The_language='Русский' then Form1.Panel1.Caption:='Включен';
+  If The_language='English' then Form1.Panel1.Caption:='ON';
+  High_Voltage_On:=1;
+
+//  Передаём значение напряжения
+
+  KolByte:=1; //оправляем комманду микроконтроллеру
+  value:=round(Form1.SpinEdit2.Value*(Codemax_DAC/Voltmax)); //преобразуем напряжение в коды
+
+  //отправляем
+  FT_Out_Buffer[0]:=1;
+  WriteComm;
+  sleep(50);
+  FT_Out_Buffer[0]:=value-trunc(value/256)*256;
+  WriteComm;
+  sleep(50);
+  FT_Out_Buffer[0]:=trunc(value/256);
+  WriteComm;
+  sleep(50);
+
+  //  Передаём значение тока
+  value:=round(Form1.SpinEdit1.Value*(Codemax_DAC/Imax)); //преобразуем ток в коды
+
+  //отправляем
+  FT_Out_Buffer[0]:=value-trunc(value/256)*256;
+  WriteComm;
+  sleep(50);
+  FT_Out_Buffer[0]:=trunc(value/256);
+  WriteComm;
+  sleep(50);
+
+  FT_Out_Buffer[0]:=2;
+  WriteComm;
+
+  Timer2.Enabled:=true;
+
+end;
+
+procedure TForm1.Button3Click(Sender: TObject); //Отключаем высоковольтник
+begin
+  Panel1.Color:=clMoneyGreen;
+  If The_language='Русский' then Form1.Panel1.Caption:='Отключен';
+  If The_language='English' then Form1.Panel1.Caption:='OFF';
+  High_Voltage_On:=0;
+  TrackBar1.Position:=0;
+  TrackBar2.Position:=TrackBar2.Max;
+
+  KolByte:=1; //оправляем комманду микроконтроллеру
+  FT_Out_Buffer[0]:=3;
+  WriteComm;
+end;
+
+procedure TForm1.Button1Click(Sender: TObject); //Выход из программы
+begin
+  //закрываем потоки
+ TerminateThread(CommThread,0);
+ CloseHandle(CommHandle);
+
+    //options.language:=The_language;
+
+    //Создаём файл инициализации
+//    The_language:='English';
+    F:=Filecreate('HighVolt.ini');
+    fileclose(F);
+
+    //Записываем настройки в файл options.ini
+    F:=fileopen('HighVolt.ini',fmOpenWrite);
+    kk:=FileWrite(F,The_language,40);
+    fileclose(F);
+
+ //выходим
+ halt(0);
+end;
+
+procedure TForm1.SpinEdit2Change(Sender: TObject);
+begin
+  TrackBar1.Position:=SpinEdit2.Value;
+  if High_Voltage_On=1 then DAC1:=SpinEdit2.Value;
+end;
+
+procedure TForm1.Timer1Timer(Sender: TObject);
+var i,delay,code:integer;
+begin
+//Таймер №1. Включается для поиска USB соединения и питания
+//Если находит, то инициализирует
+
+  PortStatus:=GetFTDeviceCount;
+  if (FT_Device_Count>0) and (PortStatus=0) then  //Если приборов=1, то USB соединение есть
+  begin
+
+  //иницализация настроек USB соединения
+  PortStatus:=Open_USB_Device;
+  PortStatus:=Reset_USB_Device;
+  FT_Current_Baud:=38400;
+  PortStatus:=Set_USB_Device_BaudRate;
+  FT_Current_DataBits:=8;
+  FT_Current_StopBits:=0;
+  FT_Current_Parity:=0;
+  PortStatus:=Set_USB_Device_DataCharacteristics;
+
+  if PortStatus<>0 then exit; //нормально инициализировались или повторим?
+
+  Timer1.Enabled:=false;
+  EEDataBuffer.Manufacturer := @Manufacturer;
+  EEDataBuffer.SerialNumber := @SerialNumber;
+  EEDataBuffer.Description := @Description;
+  PortStatus:=FT_EE_Read(FT_Handle, @EEDataBuffer);
+
+  val(EEDataBuffer.SerialNumber,SerNum,code);
+
+      If Manufacturer<>'Mantigora' then begin //подключили не наш прибор !
+        Form1.Edit7.Text:='- - - -';
+        Form1.Edit1.Text:='- - - -';
+        Form1.Edit3.Text:='- - - -';
+        High_Voltage_On:=0; // прога знает что ВВ отключен
+        Panel1.Color:=clMoneyGreen;
+        Panel1.Caption:='Не тот прибор!';
+        Timer2.Enabled:=false; //отключаем таймер сбора данных
+        Timer1.Enabled:=true; //начинаем методично ждать прихода USB
+        exit;
+      end;
+
+      If (Description='HV2000P') or (Description='HV2000N') then begin //подключён HV2000
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=2000;  // максимальное выходное напряжение (В)
+        VoltMin:=10;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=1;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=1;
+        current_view:=2;
+        if Description='HV2000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=5;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=800;
+        Imin:=5;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+
+        Trackbar2.Visible:=false; Label3.Visible:=false; SpinEdit1.Visible:=false; //Убираем регулировку тока
+        Label9.Visible:=false; Label11.Visible:=false;
+      end;
+
+      If (Description='HV6000P') or (Description='HV6000N') then begin //подключён HV6000 старый
+        Codemax_ADC:=3720; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=59519; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=20;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=1;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=1;
+        current_view:=2;
+        if Description='HV6000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=10;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=150;
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+
+        Trackbar2.Visible:=false; Label3.Visible:=false; SpinEdit1.Visible:=false; //Убираем регулировку тока
+        Label9.Visible:=false; Label11.Visible:=false;
+      end;
+
+
+      If (Description='HT2000P') or (Description='HT2000N') then begin //подключён HT2000
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=2000;  // максимальное выходное напряжение (В)
+        VoltMin:=10;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=1;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=1;
+        current_view:=2;
+        if Description='HT2000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=5;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=3000;
+        Imin:=5;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+
+        Trackbar2.Visible:=false; Label3.Visible:=false; SpinEdit1.Visible:=false; //Убираем регулировку тока
+        Label9.Visible:=false; Label11.Visible:=false;
+      end;
+
+      If (Description='HT4000P') or (Description='HT4000N') then begin //подключён HT6000P
+        Codemax:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=4000;  // максимальное выходное напряжение (В)
+        VoltMin:=15;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT4000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=2;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT6000P') or (Description='HT6000N') then begin //подключён HT6000
+        Codemax:=59519; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=20;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT6000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=2;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imin:=15;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-15-2-P') or (Description='HT-15-2-N') then begin //подключён HT-15-2
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=2000;  // максимальное выходное напряжение (В)
+        VoltMin:=5;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=10;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=0;
+        current_view:=0;
+        if Description='HT-15-2-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=0.536;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=7500;
+        Imin:=30;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-15-6-P') or (Description='HT-15-6-N') then begin //подключён HT-15-2
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=5;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=10;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=0;
+        current_view:=2;
+        if Description='HT-15-6-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=0.133;      //сопротивление токового сенсора в кОм
+        Iunits:='мА';   //ток выводим в формате мкА
+        Imax:=2500;
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-15-10-P') or (Description='HT-15-10-N') then begin //подключён HT-15-10
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=10000;  // максимальное выходное напряжение (В)
+        VoltMin:=15;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=10;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=0;
+        current_view:=0;
+        if Description='HT-15-10-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=2.67;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=1500;
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=1000; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-15-20-P') or (Description='HT-15-20-N') then begin //подключён HT-15-2
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=20000;  // максимальное выходное напряжение (В)
+        VoltMin:=60;    // минимальная выходное напряжение (В)
+        VoltStep:=10;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=1;    // шаг увеличения/уменьшения вых. тока (мкА)
+        volt_view:=0;
+        current_view:=2;
+        if Description='HT-15-20-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=1.33;      //сопротивление токового сенсора в кОм
+        Iunits:='мА';   //ток выводим в формате мкА
+        Imax:=3000;
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=5000; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-6-6-P') or (Description='HT-6-6-N') then begin //подключён HT-6-6-P(N)
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=20;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT-6-6-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=4;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=1000;
+        Imin:=4;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT6000N') or (Description='HT6000P') then begin //подключён HT6000P(N)
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=20;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT6000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=4;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=1000;
+        Imin:=5;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-6-10-P') or (Description='HT-6-10-N') then begin //подключён HT-6-10-P(N)
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=10000;  // максимальное выходное напряжение (В)
+        VoltMin:=25;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT-6-10-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=6.65;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=600;
+        Imin:=5;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=1000; //сопротивление обратной связи в МОм
+
+        Trackbar2.Visible:=true; Label3.Visible:=true; SpinEdit1.Visible:=true; //Убираем регулировку тока
+        Label9.Visible:=true; Label11.Visible:=true;
+      end;
+
+      If (Description='HT-60-2-P') or (Description='HT-60-2-N') then begin //подключён HT6000
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=2000;  // максимальное выходное напряжение (В)
+        VoltMin:=10;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT-60-2-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=0.133;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=30000;
+        Imin:=60;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100;   //сопротивление обратной связи в МОм
+        CurrentStep := 10;
+        current_view:=0;
+      end;
+
+      If (Description='HT-60-6-P') or (Description='HT-60-6-N') then begin //подключён HT6000
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=10;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep := 10;
+        if Description='HT-60-6-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=0.4;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=10000;
+        Imin:=20;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100;   //сопротивление обратной связи в МОм
+
+      end;
+
+      If (Description='HT-6-20-P') or (Description='HT-6-20-N') then begin //подключён HT-6-20
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=20000;  // максимальное выходное напряжение (В)
+        VoltMin:=2;    // минимальная выходное напряжение (В)
+        VoltStep:=10;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT-6-20-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=13.3;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=300;
+        Imin:=1;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=5000; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT20000N') or (Description='HT-6-20-N') then begin //подключён HT-6-20
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=20000;  // максимальное выходное напряжение (В)
+        VoltMin:=2;    // минимальная выходное напряжение (В)
+        VoltStep:=10;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HT-6-20-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=13.3;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=300;
+        Imin:=1;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=5000; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-60-20-P') or (Description='HT-60-20-N') then begin //подключён HT-60-20
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=20000;  // максимальное выходное напряжение (В)
+        VoltMin:=100;    // минимальная выходное напряжение (В)
+        VoltStep:=10;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=10;
+        if Description='HT-60-20-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=2;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=3000;
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=5000; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HT-15-30-P') or (Description='HT-15-30-N') then begin //подключён HT-15-30
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=30000;  // максимальное выходное напряжение (В)
+        VoltMin:=100;    // минимальная выходное напряжение (В)
+        VoltStep:=10;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=10;
+        if Description='HT-15-30-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=8.06;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=500;
+        Imin:=4;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=5000; //сопротивление обратной связи в МОм
+      end;
+
+       If (Description='HT-60-30-P') or (Description='HT-60-30-N') then begin //подключён HT-60-30
+        Codemax_ADC:=4000; // код, соответсвующий максимальному выходному напряжению
+        Codemax_DAC:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=30000;  // максимальное выходное напряжение (В)
+        VoltMin:=100;    // минимальная выходное напряжение (В)
+        VoltStep:=10;    // шаг увеличения/уменьшения вых. напряжения (В)
+        CurrentStep:=10;
+        if Description='HT-60-30-P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=2;      //сопротивление токового сенсора в кОм
+        Iunits:='мкА';   //ток выводим в формате мкА
+        Imax:=2000;
+        Imin:=10;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=5000; //сопротивление обратной связи в МОм
+      end;
+
+     If (Description='HR2000P') or (Description='HR2000N') then begin //подключён HR2000
+        Codemax:=64000; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=2000;  // максимальное выходное напряжение (В)
+        VoltMin:=10;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HR2000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=0.2;    //сопротивление токового сенсора в кОм
+        Iunits:='мА';   //ток выводим в формате мА
+//        Imin:=0.045;     //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      If (Description='HR6000P') or (Description='HR6000N') then begin //подключён HR6000
+        Codemax:=59519; // код, соответсвующий максимальному выходному напряжению
+        Voltmax:=6000;  // максимальное выходное напряжение (В)
+        VoltMin:=25;    // минимальная выходное напряжение (В)
+        VoltStep:=1;    // шаг увеличения/уменьшения вых. напряжения (В)
+        if Description='HR6000P' then Polarity:='P' else Polarity:='N';  //полярность
+        Rsense:=1;      //сопротивление токового сенсора в кОм
+        Iunits:='мА';   //ток выводим в формате мкА
+//        Imin:=0.03;    //минимальный ток, при котором ничего не индицируется.
+        Ros:=100; //сопротивление обратной связи в МОм
+      end;
+
+      //устанавливаем язык
+      Form1.ComboBox1.Text:=The_language;
+      LanguageChange;
+
+     //Устанавлваем для ручек управления нужные значения в зависимости от типа прибора
+     SpinEdit2.MaxValue:=Voltmax;
+     SpinEdit2.MinValue:=Voltmin;
+     SpinEdit2.Increment:=VoltStep;
+     TrackBar1.Max:=Voltmax;
+     TrackBar1.Min:=Voltmin;
+
+     SpinEdit1.MaxValue:=round(Imax);
+     SpinEdit1.MinValue:=round(Imin);
+     SpinEdit1.Increment:=CurrentStep;
+     TrackBar2.Max:=round(Imax);
+     TrackBar2.Min:=round(Imin);
+     Edit3.Text:=Description;
+     Form1.Edit2.Text:=SerialNumber;
+     TrackBar1.Position:=round(Voltmax/10);
+     SpinEdit2.Value:=round(Voltmax/10);
+
+     TrackBar2.Position:=round(Imax);
+     SpinEdit1.Value:=round(Imax);
+
+     If The_language='Русcкий' then if (Iunits='мА') then Label1.Caption:='Монитор выходного тока, мА:' else Label1.Caption:='Монитор выходного тока, мкА:';
+     If The_language='English' then if (Iunits='мА') then Label1.Caption:='              Output current monitor, mA:' else Label1.Caption:='              Output current monitor, uA';
+
+    //отключаем высоковольтник
+   // KolByte:=1;
+   // FT_Out_Buffer[0]:=3;
+    WriteComm;
+
+    //обновляем указатель на событие
+    PortStatus:=FT_SetEventNotification(FT_Handle,FT_EVENT_RXCHAR ,hEvent);
+
+    //проводим первое измерение
+    KolByte:=1;
+    FT_Out_Buffer[0]:=5;
+    WriteComm;
+
+    Timer2.Enabled:=true; //запускаем таймер сбора данных
+   end
+   else //если кол-во USB устройств = 0 то пишем что нет USB соединения
+      begin
+        Form1.Edit7.Text:='- - - -';
+        High_Voltage_On:=0; // прога знает что ВВ отключен
+        Panel1.Color:=clMoneyGreen;
+
+        If The_language='Русский' then Form1.Panel1.Caption:='Нет USB содинения';
+        If The_language='English' then Form1.Panel1.Caption:='No USB connection';
+
+        Edit3.Text:='- - - -';
+        Form1.Edit2.Text:='- - - -';
+        Form1.Edit1.Text:='- - - -';
+        Timer2.Enabled:=false; //отключаем таймер сбора данных
+        Timer1.Enabled:=true; //начинаем методично ждать прихода USB
+      end;
+end;
+
+procedure TForm1.Timer2Timer(Sender: TObject);
+begin
+
+//В таймере №2 периодически запрашиваем данные из МК
+  if ReadData=false then //если данные отосланы и успешно приняты, то
+  begin
+    //Посылаем команду измерить и передать
+    KolByte:=1;
+    FT_Out_Buffer[0]:=5;
+    WriteComm;
+    ReadData:=true; //говорим потоку что данные ушли
+  end;
+
+  //тут же проверяем есть ли вообще USB
+  PortStatus:=GetFTDeviceCount;
+  if FT_Device_Count=0 then  //Если приборов=0, то USB соединения нет
+  begin
+    Form1.Timer2.Enabled:=false;
+    Form1.Timer1.Enabled:=true;
+  end;
+end;
+
+procedure TForm1.TrackBar1Change(Sender: TObject);
+begin
+
+  If Voltstep=10 then Begin
+    TrackBar1.Position:=round(TrackBar1.Position/10)*10;
+    //SpinEdit2.Value:=TrackBar1.Position;
+  end;
+
+  SpinEdit2.Value:=TrackBar1.Position;
+
+end;
+
+procedure TForm1.ComboBox1Change(Sender: TObject);
+begin
+LanguageChange;
+end;
+
+procedure TForm1.TrackBar2Change(Sender: TObject);
+begin
+  If Currentstep=10 then
+    TrackBar2.Position:=round(TrackBar2.Position/10)*10;
+
+  SpinEdit1.Value:=TrackBar2.Position;
+end;
+
+procedure TForm1.SpinEdit1Change(Sender: TObject);
+begin
+  TrackBar2.Position:=SpinEdit1.Value;
+//  if High_Voltage_On=1 then DAC2:=SpinEdit1.Value;
+end;
+
+end.
+
+
+
+

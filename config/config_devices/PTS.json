@@ -1,0 +1,8 @@
+{
+  "type": "PTS",
+  "name": "PTS",
+  "poll_interval": 1.0,
+  "port": "COM2",
+  "baudrate": 19200,
+  "timeout": "2.0"
+}
