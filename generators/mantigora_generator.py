@@ -1,3 +1,4 @@
+# Автор: m.yablokov
 # generators/mantigora_generator.py — Генератор НТ-2000Р v1.0.0
 #
 # Принцип (аналогичен PTSGenerator):

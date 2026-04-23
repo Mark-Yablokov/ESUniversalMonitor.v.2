@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 pts_driver.py  v2.0.0  (21.04.2026)
 
 Драйвер для генератора MTE/EMH PTSx.xC

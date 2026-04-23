@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 generators/__init__.py
 
 Исправления (22.04.2026):

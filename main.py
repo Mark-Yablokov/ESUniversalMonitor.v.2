@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 main.py
 Главное окно приложения UniversalMonitor.
 

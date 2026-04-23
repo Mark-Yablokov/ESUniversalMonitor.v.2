@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 generators/pts_generator.py  v1.2.0
 
 Исправления v1.2.0:

@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 panels/pts_panel.py  v1.1.0  (23.04.2026)
 
 Исправления v1.1.0:

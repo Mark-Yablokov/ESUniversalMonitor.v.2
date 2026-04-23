@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 rigol_panel.py
 
 Панель устройства Rigol DM3068 (мультиметр) для UniversalMonitor.

@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 panels/base_device_panel.py
 Базовый класс для панели устройства в UniversalMonitor.
 

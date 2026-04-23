@@ -108,7 +108,7 @@ class MantigoraDriver:
     def __init__(
         self,
         port:       str = "COM1",
-        baudrate:   int = 9600,
+        baudrate:   int = 38400,
         voltage_kv: int = 2,
         power_w:    int = 6,
     ):

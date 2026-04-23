@@ -1,4 +1,5 @@
 """
+Автор: m.yablokov
 tabs/dashboard.py
 Версия 2.2.0  (23.04.2026)
 
