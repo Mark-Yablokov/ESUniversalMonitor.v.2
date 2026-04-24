@@ -1,6 +1,6 @@
 """
 mantigora_driver.py
-Драйвер высоковольтного источника питания серии HT (Mantigora).
+Драйвер высоковольтного источника питания серии HT/HP (Mantigora).
 
 Протокол обмена — простой бинарный через USB (FTDI виртуальный COM-порт).
 Документация: «Описание протокола обмена приборов серии HV и HT».
@@ -13,7 +13,7 @@ mantigora_driver.py
     [0x02]                                                → включить / обновить выход
     [0x03]                                                → выключить выход (сброс в 0)
     [0x05]                                                → запросить измерение
-        Ответ 5 байт: [I_low][I_high][U_low][U_high][0x0D]
+        Ответ 5 байт: [I_high][I_low][U_high][U_low][0x0D]  ← BIG-ENDIAN!
 
 Параметры порта: 9600 бод, 8 бит, чётная чётность (Even), 1 стоп-бит.
 
@@ -28,8 +28,10 @@ mantigora_driver.py
     20 кВ    3.2     213.3    85.32    21.33
     30 кВ    2.133   320      128      32
 
-v2.1.0 — исправлен порядок байт (little-endian) и чётность порта (Even) (2026-04-22)
+v2.1.0 — исправлен порядок байт команды (little-endian для SET) и чётность (Even) (2026-04-22)
 v2.1.1 — connect() теперь возвращает True при успешном открытии порта (2026-04-23)
+v2.2.0 — ИСПРАВЛЕН порядок байт в ответе измерения: устройство шлёт BIG-ENDIAN (2026-04-24)
+       — SET-команда остаётся little-endian (подтверждено физическими замерами мультиметром)
 """
 
 import struct
@@ -84,7 +86,7 @@ class MantigoraDriverError(Exception):
 
 class MantigoraDriver:
     """
-    Драйвер высоковольтного источника питания серии HT (Mantigora).
+    Драйвер высоковольтного источника питания серии HT/HP (Mantigora).
 
     Пример использования:
         drv = MantigoraDriver(port="COM1", voltage_kv=2, power_w=6)
@@ -168,11 +170,6 @@ class MantigoraDriver:
         -------
         bool
             True при успешном открытии порта.
-
-        Raises
-        ------
-        MantigoraDriverError
-            Если порт уже открыт или возникла ошибка serial.
         """
         with self._lock:
             if self._is_connected:
@@ -182,7 +179,7 @@ class MantigoraDriver:
                 port          = self.port,
                 baudrate      = self.baudrate,
                 bytesize      = serial.EIGHTBITS,
-                parity        = serial.PARITY_EVEN,   # чётная чётность
+                parity        = serial.PARITY_EVEN,
                 stopbits      = serial.STOPBITS_ONE,
                 timeout       = 1.0,
                 write_timeout = 1.0,
@@ -190,7 +187,7 @@ class MantigoraDriver:
             self._ser           = ser
             self._is_connected  = True
             self._output_active = False
-            return True  # ← исправление v2.1.1: явный возврат True
+            return True
 
     def disconnect(self) -> None:
         """Выключить выход и закрыть COM-порт."""
@@ -248,7 +245,13 @@ class MantigoraDriver:
     def start(self) -> None:
         """
         Передать уставки в устройство и включить выход.
-        Команда [0x01 + U_code + I_code], затем [0x02].
+
+        Порядок в команде SET (подтверждён физическими замерами):
+            [0x01] + U_code (2 байта LE) + I_code (2 байта LE)
+        Затем [0x02] — активация.
+
+        Примечание: SET-команда использует little-endian.
+        Ответ на измерение (команда 0x05) — big-endian. Это особенность прошивки.
         """
         self._check_connected()
         with self._lock:
@@ -259,7 +262,7 @@ class MantigoraDriver:
             u_code = max(0, min(0xFFFF, u_code))
             i_code = max(0, min(0xFFFF, i_code))
 
-            # Команда 0x01 + 4 байта в little-endian (U первым, затем I — по протоколу)
+            # Протокол: [CMD_SET][U_low][U_high][I_low][I_high]  (little-endian)
             payload = bytes([self.CMD_SET]) + struct.pack("<HH", u_code, i_code)
             self._ser.write(payload)
             time.sleep(0.05)
@@ -301,8 +304,13 @@ class MantigoraDriver:
         (voltage_v, current_ma) : tuple[float, float]
             Фактическое напряжение (В) и ток (мА).
 
-        Протокол ответа (5 байт, little-endian):
-            [I_low][I_high][U_low][U_high][0x0D]
+        Формат ответа (5 байт, BIG-ENDIAN):
+            [I_high][I_low][U_high][U_low][0x0D]
+
+        ВАЖНО: устройство шлёт коды в BIG-endian (старший байт первым).
+        Это подтверждено экспериментально: уставка 50 В при LE-чтении давала
+        512.2 В (код 0x4006 вместо правильного 0x0640 = 1600 → 1600/32 = 50 В).
+        SET-команда (0x01) остаётся в LE — это разные направления протокола.
         """
         self._check_connected()
         with self._lock:
@@ -321,9 +329,12 @@ class MantigoraDriver:
                 f"Неверный конец пакета: 0x{data[4]:02X} (ожидался 0x0D)"
             )
 
-        # Little-endian: младший байт первым
-        i_code = data[0] | (data[1] << 8)
-        u_code = data[2] | (data[3] << 8)
+        # *** ИСПРАВЛЕНИЕ v2.2.0 ***
+        # Устройство шлёт в BIG-endian: старший байт первым.
+        # Было (неверно): i_code = data[0] | (data[1] << 8)  ← little-endian
+        # Стало (верно):  i_code = (data[0] << 8) | data[1]  ← big-endian
+        i_code = (data[0] << 8) | data[1]   # big-endian
+        u_code = (data[2] << 8) | data[3]   # big-endian
 
         voltage_v  = u_code / self._kv
         current_ma = (i_code / self._ki) / 1000.0   # мкА → мА

@@ -1,8 +1,0 @@
-{
-  "type": "Mantigora HT",
-  "name": "HP",
-  "port": "COM1",
-  "series": "HP",
-  "power_w": 6,
-  "max_kv": 2
-}
