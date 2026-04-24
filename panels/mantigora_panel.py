@@ -18,6 +18,10 @@
 import time
 from typing import Optional
 
+# Минимальное допустимое напряжение для Mantigora.
+# При уставке 0 В — выход выключается. При 0 < U < MIN — ошибка.
+MANTIGORA_MIN_VOLTAGE = 10.0
+
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel,
@@ -111,6 +115,10 @@ class MantigoraPanel(BaseDevicePanel):
         self.voltage_spin.setSuffix(" В")
         self.voltage_spin.setDecimals(1)
         self.voltage_spin.setEnabled(False)
+        self.voltage_spin.setToolTip(
+            f"0 В = выключить выход\n"
+            f"Минимальное рабочее напряжение: {MANTIGORA_MIN_VOLTAGE:.0f} В"
+        )
         out_layout.addRow("Напряжение:", self.voltage_spin)
 
         self.current_spin = QDoubleSpinBox()
@@ -275,14 +283,26 @@ class MantigoraPanel(BaseDevicePanel):
         if not self.driver or not self.driver.is_connected:
             QMessageBox.warning(self, "Ошибка", "Устройство не подключено")
             return
+        voltage = self.voltage_spin.value()
         try:
-            self.driver.set_voltage(self.voltage_spin.value())
-            self.driver.set_current_limit(self.current_spin.value())
-            self.driver.start()
-            self.log_event(
-                f"Выход активирован: U={self.voltage_spin.value():.1f} В, "
-                f"I_max={self.current_spin.value():.4f} мА"
-            )
+            if voltage == 0.0:
+                # 0 В — выключить выход
+                self.driver.stop()
+                self.log_event("Выход выключен (уставка 0 В)")
+            elif voltage < MANTIGORA_MIN_VOLTAGE:
+                QMessageBox.warning(
+                    self, "Недопустимое напряжение",
+                    f"Минимальное напряжение Mantigora: {MANTIGORA_MIN_VOLTAGE:.0f} В.\n"
+                    f"Установите 0 В (выключить) или ≥ {MANTIGORA_MIN_VOLTAGE:.0f} В."
+                )
+            else:
+                self.driver.set_voltage(voltage)
+                self.driver.set_current_limit(self.current_spin.value())
+                self.driver.start()
+                self.log_event(
+                    f"Выход активирован: U={voltage:.1f} В, "
+                    f"I_max={self.current_spin.value():.4f} мА"
+                )
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
 
@@ -301,9 +321,25 @@ class MantigoraPanel(BaseDevicePanel):
     def set_voltage(self, voltage_v: float):
         """
         Установить уставку напряжения (В).
-        Используется MantigoraGenerator.set_point().
+        Используется MantigoraGenerator.set_point() и AutoRunThread.
+
+        Правила:
+          0 В          → выключить выход (drv.stop())
+          < MIN (10 В) → ValueError, не передавать на устройство
+          ≥ MIN        → установить и включить
         """
-        if self.driver and self.driver.is_connected:
+        if not self.driver or not self.driver.is_connected:
+            return
+        if voltage_v == 0.0:
+            self.driver.stop()
+            self.voltage_spin.setValue(0.0)
+        elif voltage_v < MANTIGORA_MIN_VOLTAGE:
+            raise ValueError(
+                f"Mantigora: напряжение {voltage_v:.1f} В ниже минимума "
+                f"({MANTIGORA_MIN_VOLTAGE:.0f} В). "
+                f"Задайте 0 В (выкл.) или ≥ {MANTIGORA_MIN_VOLTAGE:.0f} В."
+            )
+        else:
             self.driver.set_voltage(voltage_v)
             self.voltage_spin.setValue(voltage_v)
 

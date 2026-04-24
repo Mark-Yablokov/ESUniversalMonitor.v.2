@@ -2,7 +2,20 @@
   "type": "PTS",
   "name": "PTS",
   "poll_interval": 1.0,
-  "port": "COM2",
+  "port": "COM4",
   "baudrate": 19200,
-  "timeout": "2.0"
+  "timeout": "2.0",
+  "symmetric": true,
+  "setpoints": {
+    "Ua": 57.7,
+    "Ub": 57.7,
+    "Uc": 57.7,
+    "Ia": 1.0,
+    "Ib": 1.0,
+    "Ic": 1.0,
+    "phi_a": 60.0,
+    "phi_b": 60.0,
+    "phi_c": 60.0,
+    "f": 50.0
+  }
 }

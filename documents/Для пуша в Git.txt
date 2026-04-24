@@ -16,3 +16,6 @@ git push -u origin main
 git add -A
 git commit -m ""
 git push origin main
+
+для билда 
+pyinstaller ESUniversalMonitor.spec --clean

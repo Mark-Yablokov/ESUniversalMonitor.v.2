@@ -1,0 +1,8 @@
+{
+  "type": "Mantigora HT",
+  "name": "HT2000-P",
+  "port": "COM1",
+  "series": "HT",
+  "power_w": 6,
+  "max_kv": 2
+}

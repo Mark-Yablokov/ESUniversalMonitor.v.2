@@ -1,0 +1,128 @@
+{
+  "name": "Test1",
+  "version": "2.1",
+  "created": "2026-04-24 15:34",
+  "generator": {
+    "type": "PTS",
+    "port": "COM4",
+    "baudrate": 19200
+  },
+  "settling_time": 5.0,
+  "n_samples": 10,
+  "sample_interval_ms": 500,
+  "parameter_links": [
+    {
+      "name": "Ua",
+      "etalon_device": "PTS",
+      "etalon_param": "Ua",
+      "etalon_scale": 1.0,
+      "measured_device": "ENIP-2(test)",
+      "measured_param": "Ua",
+      "measured_scale": 1.0,
+      "tolerances": [
+        {
+          "error_type": "rel",
+          "tolerance": 0.2,
+          "nominal": 100.0
+        },
+        {
+          "error_type": "red",
+          "tolerance": 0.5,
+          "nominal": 57.7
+        }
+      ]
+    },
+    {
+      "name": "Uc",
+      "etalon_device": "PTS",
+      "etalon_param": "Uc",
+      "etalon_scale": 1.0,
+      "measured_device": "ENIP-2(test)",
+      "measured_param": "Uc",
+      "measured_scale": 1.0,
+      "tolerances": [
+        {
+          "error_type": "rel",
+          "tolerance": 0.2,
+          "nominal": 100.0
+        },
+        {
+          "error_type": "red",
+          "tolerance": 0.5,
+          "nominal": 57.7
+        }
+      ]
+    },
+    {
+      "name": "Ub",
+      "etalon_device": "PTS",
+      "etalon_param": "Ub",
+      "etalon_scale": 1.0,
+      "measured_device": "ENIP-2(test)",
+      "measured_param": "Ub",
+      "measured_scale": 1.0,
+      "tolerances": [
+        {
+          "error_type": "rel",
+          "tolerance": 0.2,
+          "nominal": 100.0
+        },
+        {
+          "error_type": "red",
+          "tolerance": 0.5,
+          "nominal": 57.7
+        }
+      ]
+    }
+  ],
+  "test_points": [
+    {
+      "label": "Unom",
+      "setpoints": {
+        "Ua": 57.7,
+        "Ub": 57.7,
+        "Uc": 57.7,
+        "Ia": 1.0,
+        "Ib": 1.0,
+        "Ic": 1.0,
+        "phi_a": 60.0,
+        "phi_b": 60.0,
+        "phi_c": 60.0,
+        "f": 50.0
+      },
+      "settling_time": 3.0
+    },
+    {
+      "label": "Unom",
+      "setpoints": {
+        "Ua": 57.7,
+        "Ub": 57.7,
+        "Uc": 57.7,
+        "Ia": 1.0,
+        "Ib": 1.0,
+        "Ic": 1.0,
+        "phi_a": 60.0,
+        "phi_b": 60.0,
+        "phi_c": 60.0,
+        "f": 50.0
+      },
+      "settling_time": 3.0
+    },
+    {
+      "label": "Unom",
+      "setpoints": {
+        "Ua": 57.7,
+        "Ub": 57.7,
+        "Uc": 57.7,
+        "Ia": 1.0,
+        "Ib": 1.0,
+        "Ic": 1.0,
+        "phi_a": 60.0,
+        "phi_b": 60.0,
+        "phi_c": 60.0,
+        "f": 50.0
+      },
+      "settling_time": 3.0
+    }
+  ]
+}
