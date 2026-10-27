@@ -2,32 +2,18 @@
 #
 # Сборка одного EXE файла (onefile, без консоли).
 #
-# Команда в терминале VSCode (из корня проекта):
-#
+# Команда:
 #   pyinstaller ESUniversalMonitor.spec --clean
 #
-# Результат: dist/ESUniversalMonitor.exe
-#
-# Отладочная сборка (с окном консоли для вывода ошибок):
-#
-#   pyinstaller ESUniversalMonitor.spec --clean
-#   (временно поставьте console=True ниже)
-#
-# Требования:
-#   pip install pyinstaller
-#   pip install -r requirements.txt
+# Для отладки временно поставьте console=True ниже.
 # ─────────────────────────────────────────────────────────────────────────────
 
-import os
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+import os, sys
+from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
 
-# ── Корень проекта ────────────────────────────────────────────────────────────
-# Spec-файл лежит в корне проекта, поэтому SPECPATH == корень.
-
 # ── Скрытые импорты ───────────────────────────────────────────────────────────
-# PyInstaller не всегда находит динамические импорты PyQt5, pyqtgraph, pyvisa.
 hidden_imports = [
     # PyQt5
     "PyQt5",
@@ -36,15 +22,17 @@ hidden_imports = [
     "PyQt5.QtWidgets",
     "PyQt5.sip",
 
-    # pyqtgraph
+    # pyqtgraph – только то, что реально используется
     "pyqtgraph",
     "pyqtgraph.graphicsItems",
     "pyqtgraph.graphicsItems.PlotItem",
     "pyqtgraph.graphicsItems.PlotDataItem",
     "pyqtgraph.graphicsItems.InfiniteLine",
     "pyqtgraph.graphicsItems.LegendItem",
+    "pyqtgraph.graphicsItems.LinearRegionItem",
     "pyqtgraph.widgets",
     "pyqtgraph.widgets.PlotWidget",
+    "pyqtgraph.DateAxisItem",
 
     # numpy
     "numpy",
@@ -59,15 +47,15 @@ hidden_imports = [
     "pyvisa_py.usb",
     "pyvisa_py.serial",
 
-    # pyserial (COM-порты: Mantigora, PTS)
+    # pyserial (COM-порты)
     "serial",
     "serial.tools",
     "serial.tools.list_ports",
     "serial.serialutil",
-    "serial.serialwin32",   # Windows
-    "serial.serialposix",   # Linux/macOS (на всякий случай)
+    "serial.serialwin32",
+    "serial.serialposix",
 
-    # Стандартные модули, которые иногда пропускаются
+    # Стандартные модули
     "csv",
     "json",
     "struct",
@@ -77,7 +65,7 @@ hidden_imports = [
     "datetime",
     "logging",
 
-    # Собственные пакеты проекта
+    # Собственные пакеты
     "core",
     "core.measurement_types",
     "drivers",
@@ -103,52 +91,45 @@ hidden_imports = [
     "utils.history_manager",
 ]
 
-# Добавляем все подмодули pyqtgraph автоматически
-hidden_imports += collect_submodules("pyqtgraph")
-
-# ── Дата-файлы (не-Python ресурсы) ───────────────────────────────────────────
+# ── Дата-файлы ───────────────────────────────────────────────────────────────
 datas = []
-
-# pyqtgraph может использовать шейдеры / иконки
 datas += collect_data_files("pyqtgraph")
-
-# PyQt5 платформенные плагины (критично для Windows: platforms/qwindows.dll)
-try:
-    import PyQt5
-    qt_dir = os.path.dirname(PyQt5.__file__)
-    datas += [
-        (os.path.join(qt_dir, "Qt5", "plugins", "platforms"),
-         os.path.join("PyQt5", "Qt5", "plugins", "platforms")),
-        (os.path.join(qt_dir, "Qt5", "plugins", "styles"),
-         os.path.join("PyQt5", "Qt5", "plugins", "styles")),
-    ]
-except Exception:
-    pass
 
 # Если есть иконка приложения
 _icon_path = os.path.join(SPECPATH, "icon.ico")
 
+# ── Исключения ───────────────────────────────────────────────────────────────
+excludes = [
+    "matplotlib",
+    "scipy",
+    "pandas",
+    "IPython",
+    "notebook",
+    "tkinter",
+    "PIL",
+    "cv2",
+    # Исключаем PyQt6, чтобы не было конфликта с PyQt5
+    "PyQt6",
+    "PyQt6.QtCore",
+    "PyQt6.QtGui",
+    "PyQt6.QtWidgets",
+    # Неиспользуемый OpenGL-модуль pyqtgraph
+    "pyqtgraph.opengl",
+    # Все примеры pyqtgraph (чтобы не раздувать лог и EXE)
+    "pyqtgraph.examples",
+]
+
 # ─────────────────────────────────────────────────────────────────────────────
 a = Analysis(
-    ["main.py"],                         # Точка входа
-    pathex=[SPECPATH],                   # Корень проекта в sys.path
+    ["main.py"],
+    pathex=[SPECPATH],
     binaries=[],
     datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        # Исключаем тяжёлые пакеты которые не нужны в runtime
-        "matplotlib",
-        "scipy",
-        "pandas",
-        "IPython",
-        "notebook",
-        "tkinter",
-        "PIL",
-        "cv2",
-    ],
+    excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -164,18 +145,17 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="ESUniversalMonitor",           # Имя EXE файла
+    name="ESUniversalMonitor",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,                            # UPX сжатие (уменьшает размер ~30%)
+    upx=True,
     upx_exclude=[
-        "qwindows.dll",                  # Qt плагины лучше не сжимать
+        "qwindows.dll",
         "vcruntime140.dll",
     ],
     runtime_tmpdir=None,
-    console=False,                       # False = без чёрного окна консоли
-                                         # True  = показать консоль (для отладки)
+    console=False,            # для готовой версии False, для отладки True
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

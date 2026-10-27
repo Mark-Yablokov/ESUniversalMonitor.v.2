@@ -1,7 +1,7 @@
 # ESUniversalMonitor – Контекст проекта
 
-**Версия:** 0.4.0  
-**Дата обновления:** 2026-04-24
+**Версия:** 0.5.0  
+**Дата обновления:** 2026-10-27
 
 ---
 
@@ -38,7 +38,8 @@ ESUniversalMonitor/
 │   ├── rigol_panel.py
 │   ├── pts_panel.py
 │   ├── modbus_panel.py
-│   └── mantigora_panel.py         # v2.2 — минимум 10 В, 0 В = выкл.
+│   ├── mantigora_panel.py         # v2.2 — минимум 10 В, 0 В = выкл.
+│   └── camera_panel.py            # климатическая камера SM-70, OPC UA (opcua)
 ├── tabs/
 │   ├── __init__.py
 │   ├── dashboard.py
@@ -55,7 +56,9 @@ ESUniversalMonitor/
 │   └── history_manager.py
 ├── documents/
 │   └── CONTEXT.md                 # Этот файл
-├── config_devices/                # JSON конфигурации устройств (runtime)
+├── config/
+│   ├── config_devices/            # JSON конфигурации устройств (runtime)
+│   └── config_dashboard/          # dashboard_config.json (runtime)
 ├── history/                       # CSV результатов (runtime)
 ├── methodology/                   # JSON методик поверки (runtime)
 ├── requirements.txt
@@ -72,6 +75,7 @@ ESUniversalMonitor/
 | Modbus RTU/TCP | COM / TCP | `ModbusPanel` |
 | MTE / EMH PTSx.xC (калибратор AC) | RS232 | `PTSPanel` |
 | Mantigora HT/HP (ВВ источник DC) | RS232 / FTDI | `MantigoraPanel` |
+| Климатическая камера SM-70/100-120 | LAN / OPC UA | `CameraPanel` (тип в конфиге: `"Camera"`) |
 
 ---
 
@@ -269,6 +273,31 @@ params = getattr(panel, 'parameters', {})
 
 ---
 
+### v0.5.0 — климатическая камера, пути, удаление устройств (2026-10-27)
+
+#### panels/camera_panel.py (новый)
+- `CameraPanel(BaseDevicePanel)`, `device_type = "Camera"`. Связь по OPC UA (`opcua`).
+- Параметры: Температура (°C), Влажность (%), Уставка температуры, Уставка влажности.
+- Управление: уставки, ПУСК (F9), СТОП (F10, с подтверждением), режим влажности (F7).
+- `CameraOPCDriver` (Lock на все обращения), `CameraPollingThread` (QThread, интервал
+  берётся у панели на каждом цикле, 3 ошибки подряд = потеря связи).
+- Тип записываемого значения определяется по типу текущего значения узла.
+- Ошибки пишутся в лог событий с местом в коде (`_log_error`).
+- NodeId узлов — константы в начале файла (из explore_opc.py).
+
+#### main.py
+- Регистрация `CameraPanel`: импорт, пункт «Климатическая камера» в диалоге, ветка `"Camera"` при загрузке конфигов.
+- **Баг:** `CONFIG_DIR`/`HISTORY_DIR` были относительными — файлы создавались в папке запуска,
+  а не рядом с программой. Теперь `BASE_DIR` (папка `main.py` или EXE при PyInstaller).
+- Кнопка «🗑 Удалить устройство» (`_delete_current_device`): стоп опроса, отключение,
+  удаление вкладки, удаление `config/config_devices/<имя>.json`.
+- Кнопка «📂 Папка конфигов», путь к конфигам показывается в статус-баре при старте.
+
+> Известно: `tabs/dashboard.py` всё ещё использует относительный путь `config/config_dashboard/`.
+> После удаления устройства его параметры могут остаться в настроенных графиках Dashboard.
+
+---
+
 ## 7. Сборка в EXE (PyInstaller)
 
 ### Требования
@@ -301,7 +330,7 @@ dist/
 └── ESUniversalMonitor.exe   # единственный файл для распространения
 ```
 
-Папки `methodology/`, `config_devices/`, `history/` создаются рядом с EXE
+Папки `methodology/`, `config/`, `history/` создаются рядом с EXE
 автоматически при первом запуске (если не существуют).
 
 ---
@@ -315,6 +344,7 @@ numpy>=1.24
 pyvisa>=1.13
 pyvisa-py>=0.7
 pyserial>=3.5
+opcua>=0.98.13    # климатическая камера (OPC UA)
 pyinstaller>=6.0   # только для сборки
 ```
 

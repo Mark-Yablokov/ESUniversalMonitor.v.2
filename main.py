@@ -18,6 +18,16 @@ main.py
 Исправления (23.04.2026 — bugfix):
   - _load_devices_from_config: ключ "Mantigora" расширен до ("Mantigora", "Mantigora HT"),
     чтобы конфиги, сохранённые с type="Mantigora HT", тоже загружались корректно.
+
+Добавлено: климатическая камера (OPC UA) — CameraPanel, тип "Camera".
+
+Изменения (0.5.0):
+  - Пути config/ и history/ теперь абсолютные (рядом с main.py или с EXE),
+    а не относительно текущей папки запуска. Раньше конфиги попадали туда,
+    откуда запущена программа (например, из другой папки VSCode-терминала).
+  - Кнопка «Удалить устройство» (удаляет вкладку и JSON-конфиг).
+  - Кнопка «Папка конфигов» (открывает папку в проводнике).
+  - В статус-баре при старте показывается путь к папке конфигов.
 """
 
 import sys
@@ -33,7 +43,8 @@ from PyQt5.QtWidgets import (
     QTabWidget, QTabBar, QPushButton, QMessageBox, QFileDialog,
     QInputDialog, QLabel, QStatusBar
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot
+from PyQt5.QtCore import Qt, QTimer, QUrl, pyqtSlot
+from PyQt5.QtGui import QDesktopServices
 
 # ── Панели устройств ──────────────────────────────────────────────────────────
 from panels.base_device_panel import BaseDevicePanel
@@ -41,6 +52,7 @@ from panels.rigol_panel import RigolPanel
 from panels.modbus_panel import ModbusPanel
 from panels.mantigora_panel import MantigoraPanel
 from panels.pts_panel import PTSPanel
+from panels.camera_panel import CameraPanel
 
 # ── Вкладки ───────────────────────────────────────────────────────────────────
 from tabs.dashboard import Dashboard
@@ -48,8 +60,15 @@ from tabs.manual_generation_tab import ManualGenerationTab
 from tabs.auto_test_tab import AutoTestTab
 
 # ── Пути конфигурации ─────────────────────────────────────────────────────────
-CONFIG_DIR  = os.path.join("config", "config_devices")
-HISTORY_DIR = "history"
+# Базовая папка: рядом с EXE (если собрано PyInstaller) или рядом с main.py.
+# Не зависит от того, из какой папки запущена программа.
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_DIR  = os.path.join(BASE_DIR, "config", "config_devices")
+HISTORY_DIR = os.path.join(BASE_DIR, "history")
 
 
 class MainWindow(QMainWindow):
@@ -106,6 +125,16 @@ class MainWindow(QMainWindow):
         self.history_btn.clicked.connect(self._select_history_file)
         top_layout.addWidget(self.history_btn)
 
+        open_cfg_btn = QPushButton("📂 Папка конфигов")
+        open_cfg_btn.setStyleSheet("color: #e6edf3;")
+        open_cfg_btn.clicked.connect(self._open_config_folder)
+        top_layout.addWidget(open_cfg_btn)
+
+        delete_btn = QPushButton("🗑 Удалить устройство")
+        delete_btn.setStyleSheet("color: #f85149;")
+        delete_btn.clicked.connect(self._delete_current_device)
+        top_layout.addWidget(delete_btn)
+
         save_btn = QPushButton("💾 Сохранить конфигурацию")
         save_btn.setStyleSheet("color: #e6edf3;")
         save_btn.clicked.connect(self._save_all_configs)
@@ -150,7 +179,7 @@ class MainWindow(QMainWindow):
 
     def _show_add_device_dialog(self):
         # Имена в списке ДОЛЖНЫ совпадать со строками в if/elif ниже
-        available_types = ["Rigol DM3068", "Modbus", "PTS", "Mantigora HT"]
+        available_types = ["Rigol DM3068", "Modbus", "PTS", "Mantigora HT", "Климатическая камера"]
 
         device_type, ok = QInputDialog.getItem(
             self, "Добавить устройство", "Тип устройства:",
@@ -181,6 +210,8 @@ class MainWindow(QMainWindow):
             panel = PTSPanel(name)
         elif device_type == "Mantigora HT":
             panel = MantigoraPanel(name)
+        elif device_type == "Климатическая камера":
+            panel = CameraPanel(name)
         else:
             QMessageBox.critical(self, "Ошибка", f"Неизвестный тип: {device_type}")
             return
@@ -212,6 +243,63 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Ошибка",
                 f"Не удалось сохранить конфигурацию {panel.device_name}:\n{e}")
+
+    def _open_config_folder(self):
+        """Открывает папку с конфигами устройств в проводнике."""
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(CONFIG_DIR))
+
+    def _delete_current_device(self):
+        """Удаляет устройство, вкладка которого сейчас открыта:
+        останавливает опрос, отключает, убирает вкладку и удаляет JSON-конфиг."""
+        panel = self.tab_widget.currentWidget()
+        if panel is None or panel not in self.device_panels:
+            QMessageBox.information(
+                self, "Удаление устройства",
+                "Откройте вкладку устройства, которое нужно удалить.")
+            return
+
+        name = panel.device_name
+        answer = QMessageBox.question(
+            self, "Удаление устройства",
+            f"Удалить устройство «{name}»?\n"
+            f"Файл его конфигурации тоже будет удалён.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+
+        # 1. Остановить опрос и отключиться от прибора
+        try:
+            panel.stop_polling()
+            panel.disconnect_device()
+        except Exception as e:
+            print(f"[main] Ошибка при отключении {name}: {e}")
+
+        # 2. Убрать вкладку. Сначала уходим на Dashboard, иначе после removeTab
+        #    Qt может выбрать вкладку «+» и откроется диалог добавления устройства.
+        self.tab_widget.blockSignals(True)
+        self.tab_widget.setCurrentIndex(0)
+        self.tab_widget.removeTab(self.tab_widget.indexOf(panel))
+        self.tab_widget.blockSignals(False)
+
+        # 3. Убрать из общего списка (его же используют Dashboard и другие вкладки)
+        self.device_panels.remove(panel)
+        try:
+            panel.data_updated.disconnect(self._on_device_data_updated)
+        except TypeError:
+            pass
+        panel.deleteLater()
+
+        # 4. Удалить файл конфигурации
+        filename = os.path.join(CONFIG_DIR, f"{name}.json")
+        try:
+            if os.path.exists(filename):
+                os.remove(filename)
+        except Exception as e:
+            QMessageBox.warning(self, "Ошибка",
+                f"Устройство удалено, но файл не удалось стереть:\n{filename}\n{e}")
+
+        self.statusBar().showMessage(f"Устройство '{name}' удалено", 3000)
 
     def _save_all_configs(self):
         for panel in self.device_panels:
@@ -250,6 +338,9 @@ class MainWindow(QMainWindow):
                 # "Mantigora" (старый) и "Mantigora HT" (новый, из MantigoraPanel.get_config)
                 panel = MantigoraPanel(name)
                 panel.apply_config(config)
+            elif dev_type == "Camera":
+                panel = CameraPanel(name)
+                panel.apply_config(config)
             else:
                 continue
 
@@ -257,7 +348,8 @@ class MainWindow(QMainWindow):
             idx = self.tab_widget.count() - 1
             self.tab_widget.insertTab(idx, panel, name)
 
-        self.statusBar().showMessage(f"Загружено устройств: {len(self.device_panels)}")
+        self.statusBar().showMessage(
+            f"Загружено устройств: {len(self.device_panels)}  |  Конфиги: {CONFIG_DIR}")
 
     @pyqtSlot(str, str, float, str)
     def _on_device_data_updated(self, device_name: str, param_name: str,
