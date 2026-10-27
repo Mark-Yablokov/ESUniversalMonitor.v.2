@@ -1,0 +1,16 @@
+Перейти в окружение:
+cd C:/Users/m.yablokov/Desktop/Utilits/_Pythot/ESUniversalMonitor.v.2.0
+Set-ExecutionPolicy -Scope Process Bypass
+.\.venv\Scripts\Activate.ps1
+
+Зависимости:
+python -m pip install -r requirements.txt pyinstaller
+
+Запушить на Git:
+git status
+git add .
+git commit -m "Указать комментарий"
+git push
+
+Сборка в .exe:
+python -m PyInstaller ESUniversalMonitor.spec --clean --noconfirm
